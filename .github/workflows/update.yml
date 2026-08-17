@@ -1,1 +1,38 @@
+name: Update case index
 
+on:
+  schedule:
+    # 11:17 UTC daily. Odd minutes get scheduled more reliably than :00.
+    - cron: "17 11 * * *"
+  workflow_dispatch: # lets you run it by hand from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Fetch new press releases
+        run: node scripts/fetch.js
+        env:
+          WINDOW_DAYS: "730" # keep the last 2 years
+          MAX_PAGES: "20" # 20 pages x 50 = 1000 newest releases per run
+          ONLY_SENTENCED: "true" # keep only releases that state a sentence
+
+      - name: Rebuild the site data
+        run: node scripts/build.js
+
+      - name: Commit if anything changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data docs
+          git diff --staged --quiet || git commit -m "Update index $(date -u +%Y-%m-%d)"
+          git push
