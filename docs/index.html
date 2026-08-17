@@ -1,1 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Plain Docket — federal cases in plain English</title>
+<meta name="description" content="Search federal criminal cases by crime, district or sentence. Built from U.S. Department of Justice press releases." />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=JetBrains+Mono:wght@400;500&display=swap" />
+<style>
+  :root{
+    --bone:#EDEEE8; --paper:#fff; --ink:#16181F; --seal:#22307A;
+    --docket:#A3231C; --muted:#6E7280; --rule:#C9CBC2;
+    --display:'Archivo','Helvetica Neue',Arial,sans-serif;
+    --body:'Newsreader',Georgia,serif;
+    --data:'JetBrains Mono',ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bone);color:var(--ink);font-family:var(--body);
+       font-size:18px;line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:940px;margin:0 auto;padding:0 20px}
+  .eyebrow{font-family:var(--data);font-size:10.5px;letter-spacing:.14em;color:var(--muted);margin:0 0 10px}
+  a{color:var(--seal)}
+  :focus-visible{outline:2px solid var(--docket);outline-offset:3px}
 
+  header{background:var(--ink);color:var(--bone);padding:26px 0 24px}
+  header .eyebrow{color:#8B93A6;display:flex;justify-content:space-between;
+                  border-bottom:1px solid #2E3240;padding-bottom:10px;margin-bottom:18px}
+  #q{width:100%;background:transparent;border:0;color:var(--bone);padding:0;
+     font-family:var(--display);font-weight:800;font-size:clamp(26px,5.5vw,44px);
+     line-height:1.05;letter-spacing:-.02em}
+  #q::placeholder{color:#7C8496}
+  .bar{border-top:2px solid var(--docket);margin-top:16px;padding-top:14px;
+       display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  select,.toggle{font-family:var(--data);font-size:11px;letter-spacing:.06em;
+       background:#20232E;color:var(--bone);border:1px solid #3A3E4C;padding:9px 11px}
+  .toggle{cursor:pointer}
+  .toggle[aria-pressed="true"]{background:var(--docket);border-color:var(--docket)}
+  .stat{font-family:var(--data);font-size:11px;color:#8B93A6;margin-left:auto}
+
+  main{padding:26px 0 70px}
+  .result{background:var(--paper);border:1px solid var(--rule);
+          border-left:3px solid var(--seal);padding:16px 18px;margin-bottom:10px}
+  .result.sent{border-left-color:var(--docket)}
+  .result h2{font-family:var(--display);font-weight:600;font-size:18px;line-height:1.35;margin:0 0 8px}
+  .result h2 a{text-decoration:none}
+  .result h2 a:hover{text-decoration:underline}
+  .meta{font-family:var(--data);font-size:10.5px;letter-spacing:.06em;color:var(--muted);margin:0 0 10px}
+  .sentence{font-family:var(--display);font-weight:800;font-size:clamp(19px,3.4vw,25px);
+            letter-spacing:-.02em;color:var(--docket);margin:0 0 8px;line-height:1.15}
+  .facts{font-size:17px;color:#2A2D36;margin:0}
+  .quote{font-size:15.5px;color:var(--muted);border-left:2px solid var(--rule);
+         padding-left:12px;margin:10px 0 0}
+  .term{border-bottom:1px dotted var(--docket);cursor:help}
+  .empty{max-width:600px;padding-top:22px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .chip{background:var(--paper);border:1px solid var(--rule);color:var(--seal);
+        font-family:var(--body);font-size:16px;padding:8px 13px;cursor:pointer}
+  footer{border-top:2px solid var(--ink);padding:16px 0 60px;font-size:15px;color:var(--muted)}
+  footer p{max-width:640px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <p class="eyebrow"><span>PLAIN DOCKET</span><span id="updated">LOADING</span></p>
+    <label for="q" class="eyebrow" style="color:#8B93A6">SEARCH FEDERAL CASES</label>
+    <input id="q" type="search" autocomplete="off" placeholder="wire fraud, fentanyl, bank robbery…" />
+    <div class="bar">
+      <select id="topic"><option value="">All crimes</option></select>
+      <select id="district"><option value="">All districts</option></select>
+      <button class="toggle" id="sortBy" aria-pressed="false">SORT: NEWEST</button>
+      <span class="stat" id="stat"></span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap" id="out"></main>
+
+<footer class="wrap">
+  <p class="eyebrow">NOTICE</p>
+  <p>Every case here comes from a U.S. Department of Justice press release, written by the
+  prosecutors who brought it. Sentences are pulled from the text automatically, so read the
+  original before relying on a number. This covers federal cases only — most crimes are
+  prosecuted in state courts that publish nothing like this. General information, not legal advice.</p>
+</footer>
+
+<script>
+const GLOSSARY = {
+  "indictment":"A grand jury's formal accusation that someone committed a crime. It is not a finding of guilt.",
+  "indicted":"Formally accused by a grand jury. Not a finding of guilt.",
+  "pleaded guilty":"Admitted guilt in court instead of going to trial. Most federal cases end this way.",
+  "plea agreement":"A deal where the defendant admits guilt, usually in exchange for lighter charges or a recommendation of a shorter sentence.",
+  "supervised release":"A period after prison when the person lives under court-set conditions and can be sent back if they break them.",
+  "restitution":"Money the defendant must pay back to the victims.",
+  "forfeiture":"Property the government takes because it was bought with, or used in, the crime.",
+  "conspiracy":"An agreement between two or more people to commit a crime. The agreement itself is the offense.",
+  "count":"One specific charge. A case can have many counts.",
+  "district court":"The federal trial court. There is at least one in every state.",
+  "concurrently":"Sentences served at the same time rather than one after another.",
+  "aggravating":"Facts that make a sentence longer.",
+  "mandatory minimum":"A sentence length set by Congress that the judge cannot go below."
+};
+const TERMS = Object.keys(GLOSSARY).sort((a,b)=>b.length-a.length);
+
+const esc = s => String(s??"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt = ts => ts ? new Date(ts*1000).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}) : "";
+
+function annotate(text){
+  let html = esc(text);
+  for(const t of TERMS){
+    const re = new RegExp(`\\b(${t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")})\\b`,"i");
+    html = html.replace(re, m => `<span class="term" title="${esc(GLOSSARY[t])}">${m}</span>`);
+  }
+  return html;
+}
+
+let DATA=null, sortMode="newest";
+const $ = id => document.getElementById(id);
+
+fetch("data.json").then(r=>r.json()).then(d=>{
+  DATA=d;
+  $("updated").textContent = "UPDATED " + new Date(d.updated).toISOString().slice(0,10);
+  for(const t of d.topics.slice(0,40)) $("topic").add(new Option(`${t.name} (${t.n})`, t.name));
+  for(const x of d.districts.slice(0,100)) $("district").add(new Option(`${x.name} (${x.n})`, x.name));
+  render();
+}).catch(()=>{
+  $("out").innerHTML = `<div class="empty"><p class="eyebrow" style="color:var(--docket)">NO DATA YET</p>
+  <p>The daily update hasn't run. Open the Actions tab in your repository and run
+  "Update case index" once by hand.</p></div>`;
+});
+
+function search(){
+  const words = $("q").value.toLowerCase().split(/\s+/).filter(Boolean);
+  const topic = $("topic").value, district = $("district").value;
+  let out = DATA.records.filter(r =>
+    (!topic || (r.topics||[]).includes(topic)) &&
+    (!district || r.district === district) &&
+    words.every(w => r.q.includes(w))
+  );
+  if(sortMode==="longest") out = [...out].sort((a,b)=>(b.months??-1)-(a.months??-1));
+  return out;
+}
+
+function render(){
+  const rows = search();
+  const shown = rows.slice(0,60);
+  const known = rows.filter(r=>r.months!==null).map(r=>r.months).sort((a,b)=>a-b);
+  const med = known.length ? known[Math.floor(known.length/2)] : null;
+
+  $("stat").textContent = `${rows.length} CASES` +
+    (med!==null ? ` · MEDIAN ${Math.round(med/12*10)/10} YRS` : "");
+
+  if(!rows.length){
+    $("out").innerHTML = `<div class="empty"><p class="eyebrow">NO MATCHES</p>
+      <p>Try a broader word — the crime rather than the person, for example.</p>
+      <div class="chips">${["wire fraud","fentanyl","bribery","child exploitation","carjacking"]
+        .map(c=>`<button class="chip" data-c="${c}">${c}</button>`).join("")}</div></div>`;
+    document.querySelectorAll(".chip").forEach(b=>b.onclick=()=>{ $("q").value=b.dataset.c; render(); });
+    return;
+  }
+
+  $("out").innerHTML = shown.map(r=>`
+    <article class="result ${r.sentenceLabel?"sent":""}">
+      ${r.sentenceLabel?`<p class="sentence">${esc(r.sentenceLabel)}</p>`:""}
+      <h2><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></h2>
+      <p class="meta">${[fmt(r.date), r.district, (r.topics||[]).join(", ")].filter(Boolean).join("  ·  ").toUpperCase()}</p>
+      <p class="facts">${annotate(r.facts)}</p>
+      ${r.sentenceRaw?`<p class="quote">${annotate(r.sentenceRaw)}</p>`:""}
+    </article>`).join("") +
+    (rows.length>shown.length?`<p class="eyebrow" style="margin-top:18px">SHOWING 60 OF ${rows.length} — NARROW YOUR SEARCH</p>`:"");
+}
+
+let timer;
+$("q").addEventListener("input",()=>{ clearTimeout(timer); timer=setTimeout(render,120); });
+$("topic").onchange = $("district").onchange = render;
+$("sortBy").onclick = e => {
+  sortMode = sortMode==="newest" ? "longest" : "newest";
+  e.target.setAttribute("aria-pressed", sortMode==="longest");
+  e.target.textContent = sortMode==="longest" ? "SORT: LONGEST SENTENCE" : "SORT: NEWEST";
+  render();
+};
+</script>
+</body>
+</html>
