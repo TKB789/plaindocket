@@ -4,12 +4,12 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Plain Docket — federal cases in plain English</title>
-<meta name="description" content="Search federal criminal cases by crime, district or sentence. Built from U.S. Department of Justice press releases." />
+<meta name="description" content="Search federal criminal sentences and read the public filings in civil lawsuits." />
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;800&family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=JetBrains+Mono:wght@400;500&display=swap" />
 <style>
   :root{
     --bone:#EDEEE8; --paper:#fff; --ink:#16181F; --seal:#22307A;
-    --docket:#A3231C; --muted:#6E7280; --rule:#C9CBC2;
+    --docket:#A3231C; --muted:#6E7280; --rule:#C9CBC2; --green:#2C5A2E;
     --display:'Archivo','Helvetica Neue',Arial,sans-serif;
     --body:'Newsreader',Georgia,serif;
     --data:'JetBrains Mono',ui-monospace,Menlo,monospace;
@@ -20,69 +20,254 @@
   .wrap{max-width:940px;margin:0 auto;padding:0 20px}
   .eyebrow{font-family:var(--data);font-size:10.5px;letter-spacing:.14em;color:var(--muted);margin:0 0 10px}
   a{color:var(--seal)}
-  :focus-visible{outline:2px solid var(--docket);outline-offset:3px}
+  :focus-visible{outline:2px solid var(--docket);outline-offset:2px}
+  .hidden{display:none !important}
 
-  header{background:var(--ink);color:var(--bone);padding:26px 0 24px}
-  header .eyebrow{color:#8B93A6;display:flex;justify-content:space-between;
-                  border-bottom:1px solid #2E3240;padding-bottom:10px;margin-bottom:18px}
-  #q{width:100%;background:transparent;border:0;color:var(--bone);padding:0;
-     font-family:var(--display);font-weight:800;font-size:clamp(26px,5.5vw,44px);
-     line-height:1.05;letter-spacing:-.02em}
-  #q::placeholder{color:#7C8496}
-  .bar{border-top:2px solid var(--docket);margin-top:16px;padding-top:14px;
-       display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-  select,.toggle{font-family:var(--data);font-size:11px;letter-spacing:.06em;
-       background:#20232E;color:var(--bone);border:1px solid #3A3E4C;padding:9px 11px}
-  .toggle{cursor:pointer}
-  .toggle[aria-pressed="true"]{background:var(--docket);border-color:var(--docket)}
+  header{background:var(--ink);color:var(--bone);padding:18px 0 20px}
+  .brand{font-family:var(--data);font-size:10.5px;letter-spacing:.14em;color:#8B93A6;
+         display:flex;justify-content:space-between;border-bottom:1px solid #2E3240;
+         padding-bottom:10px;margin-bottom:14px}
+  .tabs{display:flex;gap:0;margin-bottom:16px;border:1px solid #3A3E4C;width:fit-content}
+  .tab{font-family:var(--data);font-size:11px;letter-spacing:.1em;background:transparent;
+       color:#8B93A6;border:0;padding:10px 16px;cursor:pointer}
+  .tab[aria-selected="true"]{background:#2E3240;color:var(--bone)}
+  .lede{font-family:var(--display);font-weight:800;font-size:clamp(20px,4.4vw,28px);
+        line-height:1.15;letter-spacing:-.02em;margin:0 0 14px;max-width:17ch}
+  .lede em{font-style:normal;color:#FF8A82}
+
+  .field{display:flex;align-items:center;gap:10px;background:var(--paper);
+         border:3px solid var(--docket);padding:0 14px;height:58px}
+  .field svg{flex:0 0 auto;width:20px;height:20px;stroke:var(--docket)}
+  .field input{flex:1;min-width:0;height:100%;background:transparent;border:0;color:var(--ink);
+     font-family:var(--display);font-weight:600;font-size:18px}
+  .field input::placeholder{color:#8A8F9C;font-weight:500}
+  .field input::-webkit-search-cancel-button{display:none}
+  .clear{background:none;border:0;color:var(--muted);font-family:var(--data);font-size:17px;cursor:pointer}
+
+  .tries{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}
+  .tries span{font-family:var(--data);font-size:10px;letter-spacing:.14em;color:#8B93A6}
+  .try,.toggle,select{font-family:var(--data);font-size:11px;letter-spacing:.05em;
+       background:#20232E;color:#C6CBD6;border:1px solid #3A3E4C;padding:8px 10px;cursor:pointer}
+  .toggle[aria-pressed="true"]{background:var(--docket);border-color:var(--docket);color:#fff}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
   .stat{font-family:var(--data);font-size:11px;color:#8B93A6;margin-left:auto}
 
-  main{padding:26px 0 70px}
-  .result{background:var(--paper);border:1px solid var(--rule);
-          border-left:3px solid var(--seal);padding:16px 18px;margin-bottom:10px}
-  .result.sent{border-left-color:var(--docket)}
-  .result h2{font-family:var(--display);font-weight:600;font-size:18px;line-height:1.35;margin:0 0 8px}
-  .result h2 a{text-decoration:none}
-  .result h2 a:hover{text-decoration:underline}
+  main{padding:24px 0 60px}
+  .card{background:var(--paper);border:1px solid var(--rule);border-left:3px solid var(--seal);
+        padding:16px 18px;margin-bottom:10px}
+  .card.sent{border-left-color:var(--docket)}
+  .card h2{font-family:var(--display);font-weight:600;font-size:18px;line-height:1.35;margin:0 0 8px}
+  .card h2 .tag{vertical-align:middle;margin-left:8px;margin-right:0}
+  .card h2 a,.card h2 button{text-decoration:none}
   .meta{font-family:var(--data);font-size:10.5px;letter-spacing:.06em;color:var(--muted);margin:0 0 10px}
   .sentence{font-family:var(--display);font-weight:800;font-size:clamp(19px,3.4vw,25px);
             letter-spacing:-.02em;color:var(--docket);margin:0 0 8px;line-height:1.15}
   .facts{font-size:17px;color:#2A2D36;margin:0}
-  .quote{font-size:15.5px;color:var(--muted);border-left:2px solid var(--rule);
-         padding-left:12px;margin:10px 0 0}
+  .quote{font-size:15.5px;color:var(--muted);border-left:2px solid var(--rule);padding-left:12px;margin:10px 0 0}
   .term{border-bottom:1px dotted var(--docket);cursor:help}
-  .empty{max-width:600px;padding-top:22px}
-  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-  .chip{background:var(--paper);border:1px solid var(--rule);color:var(--seal);
-        font-family:var(--body);font-size:16px;padding:8px 13px;cursor:pointer}
+
+  /* lawsuits */
+  .caselink{width:100%;text-align:left;background:var(--paper);border:1px solid var(--rule);
+            border-left:3px solid var(--seal);padding:16px 18px;margin-bottom:10px;cursor:pointer;
+            font-family:var(--body);font-size:18px;color:var(--ink)}
+  .caselink strong{font-family:var(--display);font-weight:600;font-size:18px;display:block;margin-bottom:6px}
+  .backlink{font-family:var(--data);font-size:11px;letter-spacing:.08em;background:none;border:0;
+            color:var(--seal);padding:0 0 14px;cursor:pointer}
+  .casehead{border-bottom:2px solid var(--ink);padding-bottom:16px;margin-bottom:18px}
+  .casehead h2{font-family:var(--display);font-weight:800;font-size:clamp(22px,4.4vw,30px);
+               letter-spacing:-.02em;line-height:1.15;margin:0 0 8px}
+  .counts{font-family:var(--data);font-size:11px;color:var(--muted);letter-spacing:.05em}
+  .entry{background:var(--paper);border:1px solid var(--rule);padding:14px 16px;margin-bottom:8px}
+  .entry.has{border-left:3px solid var(--green)}
+  .entry.none{border-left:3px solid var(--rule)}
+  .entry .no{font-family:var(--data);font-size:11px;color:var(--muted);letter-spacing:.06em;margin:0 0 6px}
+  .entry p.txt{margin:0;font-size:16.5px}
+  .docs{list-style:none;padding:0;margin:10px 0 0}
+  .docs li{margin-bottom:5px;font-size:15.5px}
+  .docs a{font-family:var(--display);font-weight:600;font-size:15px;text-decoration:none}
+  .docs a:hover{text-decoration:underline}
+  .tag{font-family:var(--data);font-size:9.5px;letter-spacing:.1em;padding:2px 6px;margin-right:7px}
+  .tag.ok{background:#E3EAE1;color:var(--green)}
+  .tag.off{background:#EFEFEA;color:var(--muted)}
+  .tag.ex{background:#F2E7DC;color:#8A5A20}
+
+  .note{max-width:620px}
+  .note h3{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:-.02em;margin:0 0 10px}
+  .scope{background:var(--paper);border:1px solid var(--rule);border-top:3px solid var(--seal);
+         padding:16px 18px;margin-top:18px}
+  .scope p{margin:0 0 10px;font-size:16.5px}
+  .scope p:last-child{margin:0}
+  .yes,.no2{font-family:var(--data);font-size:10px;letter-spacing:.1em;padding:2px 6px;margin-right:8px}
+  .yes{background:#E3EAE1;color:var(--green)}
+  .no2{background:#F2E3E2;color:var(--docket)}
   footer{border-top:2px solid var(--ink);padding:16px 0 60px;font-size:15px;color:var(--muted)}
-  footer p{max-width:640px}
+  footer p{max-width:640px;margin:0 0 10px}
 </style>
 </head>
 <body>
 
 <header>
   <div class="wrap">
-    <p class="eyebrow"><span>PLAIN DOCKET</span><span id="updated">LOADING</span></p>
-    <label for="q" class="eyebrow" style="color:#8B93A6">SEARCH FEDERAL CASES</label>
-    <input id="q" type="search" autocomplete="off" placeholder="wire fraud, fentanyl, bank robbery…" />
-    <div class="bar">
-      <select id="topic"><option value="">All crimes</option></select>
-      <select id="district"><option value="">All districts</option></select>
-      <button class="toggle" id="sortBy" aria-pressed="false">SORT: NEWEST</button>
-      <span class="stat" id="stat"></span>
+    <p class="brand"><span>PLAIN DOCKET</span><span id="updated">LOADING</span></p>
+
+    <div class="tabs" role="tablist">
+      <button class="tab" id="tabS" role="tab" aria-selected="true">SENTENCES</button>
+      <button class="tab" id="tabL" role="tab" aria-selected="false">LAWSUITS</button>
+      <button class="tab" id="tabR" role="tab" aria-selected="false">LEARN</button>
+    </div>
+
+    <!-- sentences -->
+    <div id="ctlS">
+      <h1 class="lede">Federal crimes and the sentences people <em>actually got</em>.</h1>
+      <div class="field">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <input id="q" type="search" autocomplete="off" aria-label="Search federal cases"
+               placeholder="Search a crime, name, or district" />
+        <button class="clear hidden" id="clearS" aria-label="Clear search">✕</button>
+      </div>
+      <div class="tries"><span>TRY</span>
+        <button class="try" data-c="wire fraud">WIRE FRAUD</button>
+        <button class="try" data-c="fentanyl">FENTANYL</button>
+        <button class="try" data-c="bribery">BRIBERY</button>
+      </div>
+      <div class="bar">
+        <select id="topic" aria-label="Filter by crime"><option value="">All crimes</option></select>
+        <select id="district" aria-label="Filter by district"><option value="">All districts</option></select>
+        <button class="toggle" id="sortBy" aria-pressed="false">SORT: NEWEST</button>
+        <span class="stat" id="statS"></span>
+      </div>
+    </div>
+
+    <!-- lawsuits -->
+    <div id="ctlL" class="hidden">
+      <h1 class="lede">Civil lawsuits and the filings you can <em>read yourself</em>.</h1>
+      <div class="field">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <input id="ql" type="search" autocomplete="off" aria-label="Search filings"
+               placeholder="Search filings — exhibit, motion, deposition" />
+        <button class="clear hidden" id="clearL" aria-label="Clear search">✕</button>
+      </div>
+      <div class="bar">
+        <button class="toggle" id="onlyDocs" aria-pressed="false">ONLY FILINGS I CAN READ</button>
+        <span class="stat" id="statL"></span>
+      </div>
+    </div>
+
+    <!-- learn -->
+    <div id="ctlR" class="hidden">
+      <h1 class="lede">Where to look things up <em>for yourself</em>.</h1>
+      <p style="margin:0;font-size:16.5px;color:#9AA1AF;max-width:56ch">Everything on this site is
+      assembled from public records. These are the places those records live, plus the plainest
+      explanations of the legal process I could find.</p>
     </div>
   </div>
 </header>
 
-<main class="wrap" id="out"></main>
+<main class="wrap">
+  <div id="outS"></div>
+  <div id="outL" class="hidden"></div>
+  <div id="outR" class="hidden">
+
+    <p class="eyebrow">LOOK UP A CASE</p>
+    <div class="card">
+      <h2><a href="https://www.courtlistener.com/" target="_blank" rel="noopener">CourtListener</a>
+      <span class="tag ok">FREE</span></h2>
+      <p class="facts">Search millions of court opinions and federal dockets. The RECAP Archive inside
+      it holds filings that people have already paid to unlock — this is the same source the Lawsuits
+      tab reads from. Start here for almost anything.</p>
+    </div>
+    <div class="card">
+      <h2><a href="https://pacer.uscourts.gov/" target="_blank" rel="noopener">PACER</a>
+      <span class="tag off">10¢ PER PAGE</span></h2>
+      <p class="facts">The federal courts' own records system, and the origin of everything in RECAP.
+      Complete where RECAP has gaps, but you pay per page. Worth an account only if a document you
+      need isn't already free somewhere else.</p>
+    </div>
+    <div class="card">
+      <h2><a href="https://www.govinfo.gov/" target="_blank" rel="noopener">govinfo</a>
+      <span class="tag ok">FREE</span></h2>
+      <p class="facts">The government's official publishing site. Its U.S. Courts Opinions collection
+      carries authenticated versions of federal opinions, along with the U.S. Code and the Federal
+      Register.</p>
+    </div>
+
+    <p class="eyebrow" style="margin-top:26px">UNDERSTAND THE WORDS</p>
+    <div class="card">
+      <h2><a href="https://www.uscourts.gov/glossary" target="_blank" rel="noopener">Glossary of Legal Terms — U.S. Courts</a>
+      <span class="tag ok">FREE</span></h2>
+      <p class="facts">The federal judiciary's own dictionary, written for the public. The definitions
+      built into this site come from here. If a word in a docket entry stops you, look it up here first.</p>
+    </div>
+    <div class="card">
+      <h2><a href="https://www.law.cornell.edu/wex" target="_blank" rel="noopener">Wex — Cornell Legal Information Institute</a>
+      <span class="tag ok">FREE</span></h2>
+      <p class="facts">A free legal encyclopedia maintained by Cornell Law School. Longer than a
+      glossary entry and written by lawyers, but aimed at people who aren't ones. Good when you want
+      the concept rather than the definition.</p>
+    </div>
+    <div class="card">
+      <h2><a href="https://www.oyez.org/" target="_blank" rel="noopener">Oyez</a>
+      <span class="tag ok">FREE</span></h2>
+      <p class="facts">Every Supreme Court case since 1955, with plain-English summaries and the actual
+      audio of the argument. The best place to hear how a case is fought rather than just read how it
+      ended.</p>
+    </div>
+
+    <p class="eyebrow" style="margin-top:26px">SENTENCING AND CRIME DATA</p>
+    <div class="card">
+      <h2><a href="https://www.ussc.gov/" target="_blank" rel="noopener">U.S. Sentencing Commission</a>
+      <span class="tag ok">FREE</span></h2>
+      <p class="facts">The real answer to "what sentence do people usually get for this?" Their JSIN
+      tool shows what judges actually imposed for a given offense, and their datafiles record every
+      federal sentence. Far more reliable than generalising from news stories.</p>
+    </div>
+    <div class="card">
+      <h2><a href="https://bjs.ojp.gov/" target="_blank" rel="noopener">Bureau of Justice Statistics</a>
+      <span class="tag ok">FREE</span></h2>
+      <p class="facts">National numbers on arrests, prosecutions, prisons and victims, covering state
+      systems as well as federal. Use it when you want to know whether a case is typical or unusual.</p>
+    </div>
+
+    <p class="eyebrow" style="margin-top:26px">STATE COURTS — THE BIG GAP</p>
+    <div class="card">
+      <h2><a href="https://www.ncsc.org/" target="_blank" rel="noopener">National Center for State Courts</a>
+      <span class="tag ok">FREE</span></h2>
+      <p class="facts">Most crimes are charged in state court, and this site holds none of those. There
+      is no national database of state records — each state runs its own. NCSC is the best starting
+      point for finding your state's system.</p>
+    </div>
+
+    <p class="eyebrow" style="margin-top:26px">WHERE THIS SITE'S DATA COMES FROM</p>
+    <div class="card">
+      <h2><a href="https://www.justice.gov/news/press-releases" target="_blank" rel="noopener">Justice Department press releases</a>
+      <span class="tag ok">FREE</span></h2>
+      <p class="facts">Every case under the Sentences tab starts as one of these, written by the
+      prosecutors who brought it. Worth reading in full — they include detail the summaries here
+      leave out, and they are the authority if a number looks wrong.</p>
+    </div>
+
+    <p class="eyebrow" style="margin-top:26px">IF YOU NEED AN ACTUAL LAWYER</p>
+    <div class="card">
+      <h2><a href="https://www.lawhelp.org/" target="_blank" rel="noopener">LawHelp.org</a>
+      <span class="tag ok">FREE</span></h2>
+      <p class="facts">Nothing on this site is legal advice, and reading about similar cases is no
+      substitute for someone who knows yours. LawHelp connects people to free and low-cost legal aid
+      by state and by problem.</p>
+    </div>
+
+  </div>
+</main>
 
 <footer class="wrap">
   <p class="eyebrow">NOTICE</p>
-  <p>Every case here comes from a U.S. Department of Justice press release, written by the
-  prosecutors who brought it. Sentences are pulled from the text automatically, so read the
-  original before relying on a number. This covers federal cases only — most crimes are
-  prosecuted in state courts that publish nothing like this. General information, not legal advice.</p>
+  <p>Sentences come from Justice Department press releases and are parsed automatically —
+  read the original before relying on a number.</p>
+  <p>Filings come from the RECAP Archive, which holds federal court records that someone has
+  already paid to unlock. A filing missing here is not a filing that doesn't exist. Sealed and
+  redacted material never appears, and most trial evidence is never filed publicly at all.
+  General information, not legal advice.</p>
 </footer>
 
 <script>
@@ -90,21 +275,27 @@ const GLOSSARY = {
   "indictment":"A grand jury's formal accusation that someone committed a crime. It is not a finding of guilt.",
   "indicted":"Formally accused by a grand jury. Not a finding of guilt.",
   "pleaded guilty":"Admitted guilt in court instead of going to trial. Most federal cases end this way.",
-  "plea agreement":"A deal where the defendant admits guilt, usually in exchange for lighter charges or a recommendation of a shorter sentence.",
-  "supervised release":"A period after prison when the person lives under court-set conditions and can be sent back if they break them.",
+  "supervised release":"A period after prison when the person lives under court-set conditions.",
   "restitution":"Money the defendant must pay back to the victims.",
   "forfeiture":"Property the government takes because it was bought with, or used in, the crime.",
-  "conspiracy":"An agreement between two or more people to commit a crime. The agreement itself is the offense.",
-  "count":"One specific charge. A case can have many counts.",
+  "conspiracy":"An agreement between two or more people to commit a crime.",
   "district court":"The federal trial court. There is at least one in every state.",
-  "concurrently":"Sentences served at the same time rather than one after another.",
-  "aggravating":"Facts that make a sentence longer.",
-  "mandatory minimum":"A sentence length set by Congress that the judge cannot go below."
+  "mandatory minimum":"A sentence length set by Congress that the judge cannot go below.",
+  "complaint":"The document that starts a lawsuit. It lays out what the plaintiff says happened.",
+  "motion":"A request asking the judge to do something — dismiss the case, order evidence handed over, decide it early.",
+  "declaration":"A written statement signed under penalty of perjury, used instead of live testimony.",
+  "exhibit":"A document attached to a filing as proof — texts, emails, contracts, photographs.",
+  "deposition":"Sworn questioning of a witness before trial, recorded by a court reporter.",
+  "summary judgment":"A ruling that decides the case without a trial because the key facts aren't in dispute.",
+  "discovery":"The stage where each side must hand over its evidence to the other.",
+  "sealed":"Filed with the court but hidden from the public by court order.",
+  "stipulation":"Something both sides agree to, so nobody has to prove it."
 };
 const TERMS = Object.keys(GLOSSARY).sort((a,b)=>b.length-a.length);
-
-const esc = s => String(s??"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt = ts => ts ? new Date(ts*1000).toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}) : "";
+const fmtd = d => d ? new Date(d+"T12:00:00").toLocaleDateString(undefined,{year:"numeric",month:"short",day:"numeric"}) : "";
+const $ = id => document.getElementById(id);
 
 function annotate(text){
   let html = esc(text);
@@ -115,70 +306,181 @@ function annotate(text){
   return html;
 }
 
+/* ---------- tabs ---------- */
+let tab = "S";
+function setTab(t){
+  tab = t;
+  for(const k of ["S","L","R"]){
+    $("tab"+k).setAttribute("aria-selected", t===k);
+    $("ctl"+k).classList.toggle("hidden", t!==k);
+    $("out"+k).classList.toggle("hidden", t!==k);
+  }
+  window.scrollTo({top:0});
+  if(t==="L" && !LAW) loadLaw();
+}
+$("tabS").onclick = ()=>setTab("S");
+$("tabL").onclick = ()=>setTab("L");
+$("tabR").onclick = ()=>setTab("R");
+
+/* ---------- sentences ---------- */
 let DATA=null, sortMode="newest";
-const $ = id => document.getElementById(id);
+const SCOPE = `<div class="scope">
+  <p><span class="yes">IN HERE</span>Federal criminal cases the Justice Department prosecuted and
+  announced, where a sentence has already been handed down.</p>
+  <p><span class="no2">NOT IN HERE</span>Civil lawsuits — those live under the Lawsuits tab, and only
+  for cases on the watchlist.</p>
+  <p><span class="no2">NOT IN HERE</span>State and local prosecutions, which is where most crime is
+  charged. There is no national database of those.</p></div>`;
 
 fetch("data.json").then(r=>r.json()).then(d=>{
   DATA=d;
   $("updated").textContent = "UPDATED " + new Date(d.updated).toISOString().slice(0,10);
-  for(const t of d.topics.slice(0,40)) $("topic").add(new Option(`${t.name} (${t.n})`, t.name));
-  for(const x of d.districts.slice(0,100)) $("district").add(new Option(`${x.name} (${x.n})`, x.name));
-  render();
+  for(const t of (d.topics||[]).slice(0,40)) $("topic").add(new Option(`${t.name} (${t.n})`,t.name));
+  for(const x of (d.districts||[]).slice(0,100)) $("district").add(new Option(`${x.name} (${x.n})`,x.name));
+  renderS();
 }).catch(()=>{
-  $("out").innerHTML = `<div class="empty"><p class="eyebrow" style="color:var(--docket)">NO DATA YET</p>
-  <p>The daily update hasn't run. Open the Actions tab in your repository and run
-  "Update case index" once by hand.</p></div>`;
+  $("outS").innerHTML = `<div class="note"><p class="eyebrow" style="color:var(--docket)">NO DATA FILE</p>
+    <h3>The index hasn't been built yet.</h3>
+    <p>Run "Update case index" once from the Actions tab.</p></div>`;
 });
 
-function search(){
-  const words = $("q").value.toLowerCase().split(/\s+/).filter(Boolean);
-  const topic = $("topic").value, district = $("district").value;
-  let out = DATA.records.filter(r =>
-    (!topic || (r.topics||[]).includes(topic)) &&
-    (!district || r.district === district) &&
-    words.every(w => r.q.includes(w))
-  );
-  if(sortMode==="longest") out = [...out].sort((a,b)=>(b.months??-1)-(a.months??-1));
-  return out;
-}
-
-function render(){
-  const rows = search();
-  const shown = rows.slice(0,60);
-  const known = rows.filter(r=>r.months!==null).map(r=>r.months).sort((a,b)=>a-b);
-  const med = known.length ? known[Math.floor(known.length/2)] : null;
-
-  $("stat").textContent = `${rows.length} CASES` +
-    (med!==null ? ` · MEDIAN ${Math.round(med/12*10)/10} YRS` : "");
-
-  if(!rows.length){
-    $("out").innerHTML = `<div class="empty"><p class="eyebrow">NO MATCHES</p>
-      <p>Try a broader word — the crime rather than the person, for example.</p>
-      <div class="chips">${["wire fraud","fentanyl","bribery","child exploitation","carjacking"]
-        .map(c=>`<button class="chip" data-c="${c}">${c}</button>`).join("")}</div></div>`;
-    document.querySelectorAll(".chip").forEach(b=>b.onclick=()=>{ $("q").value=b.dataset.c; render(); });
+function renderS(){
+  if(!DATA) return;
+  const q = $("q").value.trim();
+  $("clearS").classList.toggle("hidden", !q);
+  if(!DATA.records.length){
+    $("statS").textContent="0 CASES";
+    $("outS").innerHTML=`<div class="note"><p class="eyebrow">INDEX EMPTY</p>
+      <h3>No cases fetched yet.</h3><p>Run "Update case index" from the Actions tab.</p></div>`;
     return;
   }
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const topic=$("topic").value, district=$("district").value;
+  let rows = DATA.records.filter(r =>
+    (!topic || (r.topics||[]).includes(topic)) &&
+    (!district || r.district===district) &&
+    words.every(w=>r.q.includes(w)));
+  if(sortMode==="longest") rows=[...rows].sort((a,b)=>(b.months??-1)-(a.months??-1));
 
-  $("out").innerHTML = shown.map(r=>`
-    <article class="result ${r.sentenceLabel?"sent":""}">
+  const known = rows.filter(r=>r.months!==null).map(r=>r.months).sort((a,b)=>a-b);
+  const med = known.length ? known[Math.floor(known.length/2)] : null;
+  $("statS").textContent = `${rows.length} CASES` + (med!==null?` · MEDIAN ${Math.round(med/12*10)/10} YRS`:"");
+
+  if(!rows.length){
+    $("outS").innerHTML = `<div class="note"><p class="eyebrow">NO MATCHES</p>
+      <h3>Nothing matches ${q?`“${esc(q)}”`:"those filters"}.</h3>
+      <p>Try the crime rather than a person's name — or the case may be a kind this tab doesn't carry.</p>
+      ${SCOPE}</div>`;
+    return;
+  }
+  const shown = rows.slice(0,60);
+  $("outS").innerHTML = shown.map(r=>`
+    <article class="card ${r.sentenceLabel?"sent":""}">
       ${r.sentenceLabel?`<p class="sentence">${esc(r.sentenceLabel)}</p>`:""}
       <h2><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title)}</a></h2>
-      <p class="meta">${[fmt(r.date), r.district, (r.topics||[]).join(", ")].filter(Boolean).join("  ·  ").toUpperCase()}</p>
+      <p class="meta">${[fmt(r.date),r.district,(r.topics||[]).join(", ")].filter(Boolean).join("  ·  ").toUpperCase()}</p>
       <p class="facts">${annotate(r.facts)}</p>
       ${r.sentenceRaw?`<p class="quote">${annotate(r.sentenceRaw)}</p>`:""}
     </article>`).join("") +
-    (rows.length>shown.length?`<p class="eyebrow" style="margin-top:18px">SHOWING 60 OF ${rows.length} — NARROW YOUR SEARCH</p>`:"");
+    (rows.length>shown.length?`<p class="eyebrow" style="margin-top:18px">SHOWING 60 OF ${rows.length}</p>`:"");
 }
 
-let timer;
-$("q").addEventListener("input",()=>{ clearTimeout(timer); timer=setTimeout(render,120); });
-$("topic").onchange = $("district").onchange = render;
-$("sortBy").onclick = e => {
-  sortMode = sortMode==="newest" ? "longest" : "newest";
+/* ---------- lawsuits ---------- */
+let LAW=null, openCase=null, onlyDocs=false;
+
+function loadLaw(){
+  $("outL").innerHTML = `<p class="eyebrow">LOADING FILINGS…</p>`;
+  fetch("lawsuits.json").then(r=>r.json()).then(d=>{ LAW=d; renderL(); })
+    .catch(()=>{
+      $("outL").innerHTML = `<div class="note"><p class="eyebrow" style="color:var(--docket)">NO FILINGS FILE</p>
+        <h3>No lawsuits have been pulled yet.</h3>
+        <p>Add a CourtListener token as the secret <code>COURTLISTENER_TOKEN</code>, list the case in
+        <code>data/watchlist.json</code>, then run the workflow.</p></div>`;
+    });
+}
+
+function renderL(){
+  const q = $("ql").value.trim();
+  $("clearL").classList.toggle("hidden", !q);
+  if(!LAW) return;
+
+  if(!openCase){
+    $("statL").textContent = `${LAW.cases.length} CASE${LAW.cases.length===1?"":"S"}`;
+    if(!LAW.cases.length){
+      $("outL").innerHTML = `<div class="note"><p class="eyebrow">WATCHLIST EMPTY</p>
+        <h3>No cases are being tracked.</h3>
+        <p>Add a docket ID to <code>data/watchlist.json</code>. You can find it in any CourtListener
+        docket URL — the number right after <code>/docket/</code>.</p></div>`;
+      return;
+    }
+    $("outL").innerHTML = LAW.cases.map((c,i)=>`
+      <button class="caselink" data-i="${i}">
+        <strong>${esc(c.caseName)}</strong>
+        <span class="meta">${[c.docketNumber, c.court?c.court.toUpperCase():null, fmtd(c.dateFiled), c.natureOfSuit]
+          .filter(Boolean).join("  ·  ")}</span>
+        <span class="counts">${c.readableCount} OF ${c.entryCount} FILINGS READABLE${c.complete?"":" · STILL LOADING HISTORY"}</span>
+      </button>`).join("");
+    document.querySelectorAll(".caselink").forEach(b=>b.onclick=()=>{
+      openCase = LAW.cases[Number(b.dataset.i)]; window.scrollTo({top:0}); renderL();
+    });
+    return;
+  }
+
+  const c = openCase;
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const entries = c.entries.filter(e=>{
+    if(onlyDocs && !e.docs.some(d=>d.available)) return false;
+    if(!words.length) return true;
+    const hay = (e.text+" "+e.docs.map(d=>d.desc||"").join(" ")).toLowerCase();
+    return words.every(w=>hay.includes(w));
+  });
+  $("statL").textContent = `${entries.length} FILINGS`;
+
+  const shown = entries.slice(0,80);
+  $("outL").innerHTML =
+    `<button class="backlink" id="back">← ALL CASES</button>
+     <div class="casehead">
+       <h2>${esc(c.caseName)}</h2>
+       <p class="meta">${[c.docketNumber, c.court?c.court.toUpperCase():null, fmtd(c.dateFiled)].filter(Boolean).join("  ·  ")}</p>
+       <p class="counts">${c.readableCount} of ${c.entryCount} filings have a document you can open${c.complete?"":" — older history still downloading"}.
+       ${c.absoluteUrl?`<a href="${esc(c.absoluteUrl)}" target="_blank" rel="noopener">Full docket ↗</a>`:""}</p>
+     </div>` +
+    (shown.length ? shown.map(e=>{
+      const has = e.docs.some(d=>d.available);
+      return `<article class="entry ${has?"has":"none"}">
+        <p class="no">${e.number!==null?`#${e.number}`:"—"}${e.date?"  ·  "+fmtd(e.date):""}</p>
+        <p class="txt">${annotate(e.text||"No description")}</p>
+        ${e.docs.length?`<ul class="docs">${e.docs.map(d=>{
+          const name = (d.att?`Exhibit / attachment ${d.att}`:"Main document") + (d.desc?` — ${d.desc}`:"");
+          return `<li>${d.available
+            ? `<span class="tag ${d.att?"ex":"ok"}">${d.att?"EXHIBIT":"PDF"}</span><a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(name)}</a>${d.pages?` <span class="counts">${d.pages}pp</span>`:""}`
+            : `<span class="tag off">NOT IN ARCHIVE</span><span class="counts">${esc(name)}</span>`}</li>`;
+        }).join("")}</ul>`:""}
+      </article>`;
+    }).join("") : `<div class="note"><p class="eyebrow">NO FILINGS MATCH</p>
+      <h3>Nothing in this docket matches that.</h3>
+      <p>Docket text is written in court shorthand. Try one word — "exhibit", "declaration", "sealed".</p></div>`) +
+    (entries.length>shown.length?`<p class="eyebrow" style="margin-top:18px">SHOWING 80 OF ${entries.length}</p>`:"");
+
+  $("back").onclick = ()=>{ openCase=null; $("ql").value=""; window.scrollTo({top:0}); renderL(); };
+}
+
+/* ---------- wiring ---------- */
+let t1,t2;
+$("q").addEventListener("input",()=>{clearTimeout(t1);t1=setTimeout(renderS,120);});
+$("ql").addEventListener("input",()=>{clearTimeout(t2);t2=setTimeout(renderL,120);});
+$("clearS").onclick=()=>{$("q").value="";renderS();};
+$("clearL").onclick=()=>{$("ql").value="";renderL();};
+$("topic").onchange=$("district").onchange=renderS;
+document.querySelectorAll(".try").forEach(b=>b.onclick=()=>{$("q").value=b.dataset.c;renderS();window.scrollTo({top:0});});
+$("sortBy").onclick=e=>{
+  sortMode = sortMode==="newest"?"longest":"newest";
   e.target.setAttribute("aria-pressed", sortMode==="longest");
-  e.target.textContent = sortMode==="longest" ? "SORT: LONGEST SENTENCE" : "SORT: NEWEST";
-  render();
+  e.target.textContent = sortMode==="longest"?"SORT: LONGEST SENTENCE":"SORT: NEWEST";
+  renderS();
+};
+$("onlyDocs").onclick=e=>{
+  onlyDocs=!onlyDocs; e.target.setAttribute("aria-pressed",onlyDocs); renderL();
 };
 </script>
 </body>
