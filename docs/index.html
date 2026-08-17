@@ -71,6 +71,21 @@
             border-left:3px solid var(--seal);padding:16px 18px;margin-bottom:10px;cursor:pointer;
             font-family:var(--body);font-size:18px;color:var(--ink)}
   .caselink strong{font-family:var(--display);font-weight:600;font-size:18px;display:block;margin-bottom:6px}
+  .caselink .meta{display:block;margin:0 0 6px}
+  .caselink .counts{display:block}
+  .go{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;
+      background:var(--docket);color:#fff;text-decoration:none;padding:14px 16px;
+      font-family:var(--display);font-weight:600;font-size:16px}
+  .go[aria-disabled="true"]{background:#3A3E4C;color:#8B93A6;pointer-events:none}
+  .go span.arrow{font-family:var(--data);font-size:15px}
+  .kinds{display:flex;margin-top:10px;border:1px solid #3A3E4C;width:fit-content;max-width:100%;flex-wrap:wrap}
+  .kind{font-family:var(--data);font-size:10.5px;letter-spacing:.08em;background:transparent;
+        color:#8B93A6;border:0;padding:9px 12px;cursor:pointer}
+  .kind[aria-pressed="true"]{background:#2E3240;color:var(--bone)}
+  .handoff{background:var(--paper);border:1px solid var(--rule);border-top:3px solid var(--docket);
+           padding:16px 18px;margin-top:16px}
+  .handoff p{margin:0 0 8px;font-size:16.5px}
+  .handoff p:last-child{margin:0}
   .backlink{font-family:var(--data);font-size:11px;letter-spacing:.08em;background:none;border:0;
             color:var(--seal);padding:0 0 14px;cursor:pointer}
   .casehead{border-bottom:2px solid var(--ink);padding-bottom:16px;margin-bottom:18px}
@@ -141,17 +156,42 @@
 
     <!-- lawsuits -->
     <div id="ctlL" class="hidden">
-      <h1 class="lede">Civil lawsuits and the filings you can <em>read yourself</em>.</h1>
-      <div class="field">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
-          <circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
-        <input id="ql" type="search" autocomplete="off" aria-label="Search filings"
-               placeholder="Search filings — exhibit, motion, deposition" />
-        <button class="clear hidden" id="clearL" aria-label="Clear search">✕</button>
+      <h1 class="lede">Every federal court record, <em>one search away</em>.</h1>
+
+      <!-- mode 1: hand off to CourtListener -->
+      <div id="searchAll">
+        <div class="field">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+          <input id="qall" type="search" autocomplete="off" enterkeyhint="search"
+                 aria-label="Search all federal court records"
+                 placeholder="A name, a company, a case, a phrase" />
+          <button class="clear hidden" id="clearAll" aria-label="Clear search">✕</button>
+        </div>
+        <div class="kinds" role="group" aria-label="What to search">
+          <button class="kind" data-t="r" aria-pressed="true">FILINGS &amp; EXHIBITS</button>
+          <button class="kind" data-t="o" aria-pressed="false">COURT OPINIONS</button>
+          <button class="kind" data-t="d" aria-pressed="false">CASES BY NAME</button>
+        </div>
+        <a class="go" id="goCL" href="https://www.courtlistener.com/" target="_blank"
+           rel="noopener" aria-disabled="true">
+          <span id="goLabel">Type something to search</span><span class="arrow">↗</span>
+        </a>
       </div>
-      <div class="bar">
-        <button class="toggle" id="onlyDocs" aria-pressed="false">ONLY FILINGS I CAN READ</button>
-        <span class="stat" id="statL"></span>
+
+      <!-- mode 2: filter inside an open case -->
+      <div id="searchIn" class="hidden">
+        <div class="field">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+          <input id="ql" type="search" autocomplete="off" aria-label="Search filings in this case"
+                 placeholder="Search this docket — exhibit, motion, sealed" />
+          <button class="clear hidden" id="clearL" aria-label="Clear search">✕</button>
+        </div>
+        <div class="bar">
+          <button class="toggle" id="onlyDocs" aria-pressed="false">ONLY FILINGS I CAN READ</button>
+          <span class="stat" id="statL"></span>
+        </div>
       </div>
     </div>
 
@@ -370,7 +410,10 @@ function renderS(){
     $("outS").innerHTML = `<div class="note"><p class="eyebrow">NO MATCHES</p>
       <h3>Nothing matches ${q?`“${esc(q)}”`:"those filters"}.</h3>
       <p>Try the crime rather than a person's name — or the case may be a kind this tab doesn't carry.</p>
-      ${SCOPE}</div>`;
+      ${SCOPE}
+      ${q?`<a class="go" href="${esc(clUrl(q,"r"))}" target="_blank" rel="noopener">
+        <span>Search every federal court record for “${esc(q)}”</span><span class="arrow">↗</span></a>`:""}
+      </div>`;
     return;
   }
   const shown = rows.slice(0,60);
@@ -386,47 +429,76 @@ function renderS(){
 }
 
 /* ---------- lawsuits ---------- */
-let LAW=null, openCase=null, onlyDocs=false;
+let LAW=null, openCase=null, onlyDocs=false, kind="r";
+
+const KIND_LABEL = { r:"filings and exhibits", o:"court opinions", d:"cases by name" };
+
+/** CourtListener's site takes the same GET parameters as its search API. */
+function clUrl(q, type){
+  const p = new URLSearchParams({ q, type, order_by:"score desc" });
+  return "https://www.courtlistener.com/?" + p.toString();
+}
+
+function syncGo(){
+  const q = $("qall").value.trim();
+  $("clearAll").classList.toggle("hidden", !q);
+  const go = $("goCL");
+  if(!q){
+    go.setAttribute("aria-disabled","true");
+    go.href = "https://www.courtlistener.com/";
+    $("goLabel").textContent = "Type something to search";
+    return;
+  }
+  go.setAttribute("aria-disabled","false");
+  go.href = clUrl(q, kind);
+  $("goLabel").textContent = `Search ${KIND_LABEL[kind]} for “${q}”`;
+}
 
 function loadLaw(){
-  $("outL").innerHTML = `<p class="eyebrow">LOADING FILINGS…</p>`;
+  if(LAW) return renderL();
   fetch("lawsuits.json").then(r=>r.json()).then(d=>{ LAW=d; renderL(); })
-    .catch(()=>{
-      $("outL").innerHTML = `<div class="note"><p class="eyebrow" style="color:var(--docket)">NO FILINGS FILE</p>
-        <h3>No lawsuits have been pulled yet.</h3>
-        <p>Add a CourtListener token as the secret <code>COURTLISTENER_TOKEN</code>, list the case in
-        <code>data/watchlist.json</code>, then run the workflow.</p></div>`;
-    });
+    .catch(()=>{ LAW={cases:[]}; renderL(); });
 }
 
 function renderL(){
-  const q = $("ql").value.trim();
-  $("clearL").classList.toggle("hidden", !q);
-  if(!LAW) return;
+  const inCase = Boolean(openCase);
+  $("searchAll").classList.toggle("hidden", inCase);
+  $("searchIn").classList.toggle("hidden", !inCase);
 
-  if(!openCase){
-    $("statL").textContent = `${LAW.cases.length} CASE${LAW.cases.length===1?"":"S"}`;
-    if(!LAW.cases.length){
-      $("outL").innerHTML = `<div class="note"><p class="eyebrow">WATCHLIST EMPTY</p>
-        <h3>No cases are being tracked.</h3>
-        <p>Add a docket ID to <code>data/watchlist.json</code>. You can find it in any CourtListener
-        docket URL — the number right after <code>/docket/</code>.</p></div>`;
-      return;
-    }
-    $("outL").innerHTML = LAW.cases.map((c,i)=>`
-      <button class="caselink" data-i="${i}">
-        <strong>${esc(c.caseName)}</strong>
-        <span class="meta">${[c.docketNumber, c.court?c.court.toUpperCase():null, fmtd(c.dateFiled), c.natureOfSuit]
-          .filter(Boolean).join("  ·  ")}</span>
-        <span class="counts">${c.readableCount} OF ${c.entryCount} FILINGS READABLE${c.complete?"":" · STILL LOADING HISTORY"}</span>
-      </button>`).join("");
+  if(!inCase){
+    syncGo();
+    const tracked = (LAW?.cases || []);
+    $("outL").innerHTML = `
+      <div class="handoff">
+        <p><strong>This site doesn't hold every case — nothing free does.</strong> The search above
+        hands your words to CourtListener, which holds hundreds of millions of federal opinions and
+        PACER filings and is always current. It opens in a new tab.</p>
+        <p>Pick <em>filings and exhibits</em> to search inside the documents themselves,
+        <em>court opinions</em> for what judges decided and why, or <em>cases by name</em> when you
+        know who sued whom.</p>
+      </div>
+      ${tracked.length ? `
+        <p class="eyebrow" style="margin-top:26px">READ IN PLAIN ENGLISH HERE</p>
+        <p style="max-width:620px;margin:0 0 14px;font-size:16.5px;color:var(--muted)">
+        A few cases are pulled apart filing by filing on this site, with the court's shorthand
+        translated and every readable document linked.</p>
+        ` + tracked.map((c,i)=>`
+        <button class="caselink" data-i="${i}">
+          <strong>${esc(c.caseName)}</strong>
+          <span class="meta">${[c.docketNumber, c.court?c.court.toUpperCase():null, fmtd(c.dateFiled)]
+            .filter(Boolean).join("  ·  ")}</span>
+          <span class="counts">${c.readableCount} OF ${c.entryCount} FILINGS READABLE${c.complete?"":" · STILL LOADING HISTORY"}</span>
+        </button>`).join("") : ""}`;
     document.querySelectorAll(".caselink").forEach(b=>b.onclick=()=>{
-      openCase = LAW.cases[Number(b.dataset.i)]; window.scrollTo({top:0}); renderL();
+      openCase = LAW.cases[Number(b.dataset.i)];
+      $("ql").value=""; window.scrollTo({top:0}); renderL();
     });
     return;
   }
 
   const c = openCase;
+  const q = $("ql").value.trim();
+  $("clearL").classList.toggle("hidden", !q);
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const entries = c.entries.filter(e=>{
     if(onlyDocs && !e.docs.some(d=>d.available)) return false;
@@ -435,8 +507,8 @@ function renderL(){
     return words.every(w=>hay.includes(w));
   });
   $("statL").textContent = `${entries.length} FILINGS`;
-
   const shown = entries.slice(0,80);
+
   $("outL").innerHTML =
     `<button class="backlink" id="back">← ALL CASES</button>
      <div class="casehead">
@@ -459,16 +531,24 @@ function renderL(){
       </article>`;
     }).join("") : `<div class="note"><p class="eyebrow">NO FILINGS MATCH</p>
       <h3>Nothing in this docket matches that.</h3>
-      <p>Docket text is written in court shorthand. Try one word — "exhibit", "declaration", "sealed".</p></div>`) +
+      <p>Docket text is court shorthand. Try one word — "exhibit", "declaration", "sealed".</p></div>`) +
     (entries.length>shown.length?`<p class="eyebrow" style="margin-top:18px">SHOWING 80 OF ${entries.length}</p>`:"");
 
-  $("back").onclick = ()=>{ openCase=null; $("ql").value=""; window.scrollTo({top:0}); renderL(); };
+  $("back").onclick = ()=>{ openCase=null; window.scrollTo({top:0}); renderL(); };
 }
 
 /* ---------- wiring ---------- */
 let t1,t2;
 $("q").addEventListener("input",()=>{clearTimeout(t1);t1=setTimeout(renderS,120);});
 $("ql").addEventListener("input",()=>{clearTimeout(t2);t2=setTimeout(renderL,120);});
+$("qall").addEventListener("input",syncGo);
+$("qall").addEventListener("keydown",e=>{ if(e.key==="Enter" && $("qall").value.trim()) $("goCL").click(); });
+$("clearAll").onclick=()=>{ $("qall").value=""; $("qall").focus(); syncGo(); };
+document.querySelectorAll(".kind").forEach(b=>b.onclick=()=>{
+  kind = b.dataset.t;
+  document.querySelectorAll(".kind").forEach(x=>x.setAttribute("aria-pressed", x===b));
+  syncGo();
+});
 $("clearS").onclick=()=>{$("q").value="";renderS();};
 $("clearL").onclick=()=>{$("ql").value="";renderL();};
 $("topic").onchange=$("district").onchange=renderS;
